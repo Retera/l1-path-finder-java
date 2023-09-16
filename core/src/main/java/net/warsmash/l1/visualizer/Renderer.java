@@ -172,11 +172,11 @@ public class Renderer {
 		for (int i = 0; i + 1 < path.size(); i += 1) {
 			Point source = path.get(i);
 			Point target = path.get(i + 1);
-			double x0 = Math.min(source.x, target.x) * tileR + o0;
-			double y0 = Math.min(source.y, target.y) * tileR + o0;
-			double x1 = Math.max(source.x, target.x) * tileR + o1;
-			double y1 = Math.max(source.y, target.y) * tileR + o1;
-			shapeRenderer.rect((float) x0, fixY((float) y0) - (float) (y1 - y0), (float) (x1 - x0), (float) (y1 - y0));
+			double x0 = (source.x + 0.5) * tileR;
+			double y0 = (source.y + 0.5) * tileR;
+			double x1 = (target.x + 0.5) * tileR;
+			double y1 = (target.y + 0.5) * tileR;
+			shapeRenderer.rectLine((float) x0, fixY((float) y0), (float) x1, fixY((float) y1), (float) (o1 - o0));
 		}
 		shapeRenderer.end();
 

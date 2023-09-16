@@ -138,14 +138,8 @@ public class L1PathPlanner {
 		// Check easy case - s and t directly connected
 		if (!geom.stabBox(tx, ty, sx, sy)) {
 			if (outo != null) {
-				if (sx != tx && sy != ty) {
-					outo.add(new Point(tx, ty));
-					outo.add(new Point(sx, ty));
-					outo.add(new Point(sx, sy));
-				} else {
-					outo.add(new Point(tx, ty));
-					outo.add(new Point(sx, sy));
-				}
+				outo.add(new Point(tx, ty));
+				outo.add(new Point(sx, sy));
 			}
 			return Math.abs(tx - sx) + Math.abs(ty - sy);
 		}

@@ -88,7 +88,7 @@ public class Planner {
 				Vertex v = planner.graph.verts.get(i);
 				v.state = 0;
 //				v.target = false;
-				Vertex.clear(v);
+//				Vertex.clear(v);
 				System.err.println("calcPath negative case, not sure what to do with this!!");
 			}
 			return;

@@ -97,18 +97,12 @@ public class Graph {
 		outpath.add(new Point(prevX, prevY));
 		Vertex head = this.target.pred;
 		while (head != null) {
-			if (prevX != head.x && prevY != head.y) {
-				outpath.add(new Point(head.x, prevY));
-			}
 			if (prevX != head.x || prevY != head.y) {
 				outpath.add(new Point(head.x, head.y));
 			}
 			prevX = head.x;
 			prevY = head.y;
 			head = head.pred;
-		}
-		if (prevX != this.srcX && prevY != this.srcY) {
-			outpath.add(new Point(this.srcX, prevY));
 		}
 		if (prevX != this.srcX || prevY != this.srcY) {
 			outpath.add(new Point(this.srcX, this.srcY));
