@@ -3,12 +3,13 @@ package net.warsmash.l1.visualizer;
 import java.util.List;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
-import net.warsmash.l1.pathfinder.Graph;
+import net.warsmash.l1.pathfinder.AbstractGraph;
+import net.warsmash.l1.pathfinder.planner.TransformedSpace;
 import net.warsmash.l1.pathfinder.util.Point;
 import net.warsmash.l1.pathfinder.vertex.IPoint;
 import net.warsmash.l1.pathfinder.vertex.Vertex;
@@ -61,7 +62,15 @@ public class Renderer {
 		}
 
 		if (tileX != lastTileX || tileY != lastTileY) {
-			this.onTileChangeAction.call(tileX, tileY, button);
+			if(Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)||Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+				for(int ix = lastTileX; ix <= tileX; ix++) {
+					for(int iy = lastTileY; iy <= tileY; iy++) {
+						this.onTileChangeAction.call(ix, iy, button);
+					}
+				}
+			} else {
+				this.onTileChangeAction.call(tileX, tileY, button);
+			}
 		}
 		if (button != lastButton) {
 			this.onButtonChangeAction.call(tileX, tileY, button);
@@ -99,7 +108,7 @@ public class Renderer {
 		shapeRenderer.end();
 	}
 
-	public void graphDist(Graph graph) {
+	public void graphDist(TransformedSpace space, AbstractGraph graph) {
 		double maxDist = 0;
 		for (int i = 0; i < graph.verts.size(); ++i) {
 			Vertex vert = graph.verts.get(i);
@@ -111,7 +120,8 @@ public class Renderer {
 		for (int i = 0; i < graph.verts.size(); ++i) {
 			Vertex v = graph.verts.get(i);
 			if (v.weight < Double.POSITIVE_INFINITY) {
-				this.tile(v.x, v.y, createGradientColor(Math.floor(maxDist - (v.weight - v.heuristic)), maxDist, 128));
+				this.tile(space.getUnprojectedX(v.x, v.y), space.getUnprojectedY(v.x, v.y),
+						createGradientColor(Math.floor(maxDist - (v.weight - v.heuristic)), maxDist, 128));
 			}
 		}
 	}
@@ -122,13 +132,14 @@ public class Renderer {
 		return ((alpha & 0xFF) << 24) | ((value & 0xFF) << 16) | ((value & 0xFF) << 8) | ((value & 0xFF) << 0);
 	}
 
-	public void graph(Graph graph, int colorInt) {
+	public void graph(TransformedSpace space, AbstractGraph graph, int colorInt) {
 		for (int i = 0; i < graph.verts.size(); ++i) {
 			Vertex v = graph.verts.get(i);
-			circle(v.x, v.y, colorInt);
+			circle(space.getUnprojectedX(v.x, v.y), space.getUnprojectedY(v.x, v.y), colorInt);
 			for (int j = 0; j < v.edges.size(); ++j) {
 				Vertex u = v.edges.get(j);
-				line(v.x, v.y, u.x, u.y, colorInt);
+				line(space.getUnprojectedX(v.x, v.y), space.getUnprojectedY(v.x, v.y), space.getUnprojectedX(u.x, u.y),
+						space.getUnprojectedY(u.x, u.y), colorInt);
 			}
 		}
 	}
@@ -142,10 +153,11 @@ public class Renderer {
 		shapeRenderer.end();
 	}
 
-	public void drawCorners(List<IPoint> corners, int colorInt) {
+	public void drawCorners(TransformedSpace space, List<IPoint> corners, int colorInt) {
 		for (int i = 0; i < corners.size(); ++i) {
 			IPoint corner = corners.get(i);
-			this.circle(corner.getX(), corner.getY(), colorInt);
+			this.circle(space.getUnprojectedX(corner.getX(), corner.getY()),
+					space.getUnprojectedY(corner.getX(), corner.getY()), colorInt);
 		}
 	}
 
@@ -161,7 +173,7 @@ public class Renderer {
 		shapeRenderer.end();
 	}
 
-	public void path(List<Point> path, int colorInt) {
+	public void path(TransformedSpace space, List<Point> path, int colorInt) {
 		int tileR = tileDim();
 		double o0 = Math.floor(tileR * 0.4);
 		double o1 = Math.ceil(tileR * 0.6);
@@ -172,10 +184,10 @@ public class Renderer {
 		for (int i = 0; i + 1 < path.size(); i += 1) {
 			Point source = path.get(i);
 			Point target = path.get(i + 1);
-			double x0 = (source.x + 0.5) * tileR;
-			double y0 = (source.y + 0.5) * tileR;
-			double x1 = (target.x + 0.5) * tileR;
-			double y1 = (target.y + 0.5) * tileR;
+			double x0 = (space.getUnprojectedX(source.x, source.y) + 0.5) * tileR;
+			double y0 = (space.getUnprojectedY(source.x, source.y) + 0.5) * tileR;
+			double x1 = (space.getUnprojectedX(target.x, target.y) + 0.5) * tileR;
+			double y1 = (space.getUnprojectedY(target.x, target.y) + 0.5) * tileR;
 			shapeRenderer.rectLine((float) x0, fixY((float) y0), (float) x1, fixY((float) y1), (float) (o1 - o0));
 		}
 		shapeRenderer.end();

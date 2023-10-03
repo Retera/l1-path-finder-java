@@ -6,18 +6,18 @@ import java.util.List;
 import java.util.Map;
 
 import net.warsmash.l1.pathfinder.BSearch;
+import net.warsmash.l1.pathfinder.DiagEqGraph;
 import net.warsmash.l1.pathfinder.Geometry;
-import net.warsmash.l1.pathfinder.Graph;
 import net.warsmash.l1.pathfinder.util.Point;
 import net.warsmash.l1.pathfinder.vertex.IPoint;
 import net.warsmash.l1.pathfinder.vertex.Vertex;
 
-public class L1PathPlanner implements PathPlanner {
+public class DiagEqL1PathPlanner implements PathPlanner {
 	public Geometry geometry;
-	public Graph graph;
+	public DiagEqGraph graph;
 	public INode root;
 
-	private L1PathPlanner(Geometry geometry, Graph graph, INode root) {
+	private DiagEqL1PathPlanner(Geometry geometry, DiagEqGraph graph, INode root) {
 		this.geometry = geometry;
 		this.graph = graph;
 		this.root = root;
@@ -27,7 +27,8 @@ public class L1PathPlanner implements PathPlanner {
 		return (int) Math.signum(bucket.y0 - y);
 	}
 
-	public static void connectList(List<Vertex> nodes, Geometry geom, Graph graph, boolean target, double x, double y) {
+	public static void connectList(List<Vertex> nodes, Geometry geom, DiagEqGraph graph, boolean target, double x,
+			double y) {
 		for (int i = 0; i < nodes.size(); ++i) {
 			Vertex v = nodes.get(i);
 			if (!geom.stabBox(v.x, v.y, x, y)) {
@@ -40,7 +41,7 @@ public class L1PathPlanner implements PathPlanner {
 		}
 	}
 
-	public static void connectNodes(Geometry geom, Graph graph, INode node, boolean target, double x, double y) {
+	public static void connectNodes(Geometry geom, DiagEqGraph graph, INode node, boolean target, double x, double y) {
 		// Mark target nodes
 		while (node != null) {
 			// Check leaf case
@@ -62,7 +63,7 @@ public class L1PathPlanner implements PathPlanner {
 
 			// Otherwise, glue into buckets
 			List<Bucket> buckets = node.getBuckets();
-			int idx = BSearch.search(buckets, y, L1PathPlanner::compareBucket);
+			int idx = BSearch.search(buckets, y, DiagEqL1PathPlanner::compareBucket);
 			if (idx >= 0) {
 				Bucket bb = buckets.get(idx);
 				if (y < bb.y1) {
@@ -120,6 +121,120 @@ public class L1PathPlanner implements PathPlanner {
 		}
 	}
 
+	public static void resetSourceList(List<Vertex> nodes, Geometry geom, DiagEqGraph graph, double x, double y) {
+		for (int i = 0; i < nodes.size(); ++i) {
+			Vertex v = nodes.get(i);
+			if (!geom.stabBox(v.x, v.y, x, y)) {
+				graph.resetS(v);
+			}
+		}
+	}
+
+	public static void resetSourceNodes(Geometry geom, DiagEqGraph graph, INode node, double x, double y) {
+		// Mark target nodes
+		while (node != null) {
+			// Check leaf case
+			if (node.isLeaf()) {
+				List<Vertex> vv = node.getVerts();
+				int nn = vv.size();
+				for (int i = 0; i < nn; ++i) {
+					Vertex v = vv.get(i);
+					if (!geom.stabBox(v.x, v.y, x, y)) {
+						graph.resetS(v);
+					}
+				}
+				break;
+			}
+
+			// Otherwise, glue into buckets
+			List<Bucket> buckets = node.getBuckets();
+			int idx = BSearch.search(buckets, y, DiagEqL1PathPlanner::compareBucket);
+			if (idx >= 0) {
+				Bucket bb = buckets.get(idx);
+				if (y < bb.y1) {
+					// Common case:
+					if (node.getX() >= x) {
+						// Connect right
+						resetSourceList(bb.right, geom, graph, x, y);
+					}
+					if (node.getX() <= x) {
+						// Connect left
+						resetSourceList(bb.left, geom, graph, x, y);
+					}
+					// Connect on
+					resetSourceList(bb.on, geom, graph, x, y);
+				} else {
+					// Connect to bottom of bucket above
+					Vertex v = buckets.get(idx).bottom;
+					if (v != null && !geom.stabBox(v.x, v.y, x, y)) {
+						graph.resetS(v);
+					}
+					// Connect to top of bucket below
+					if (idx + 1 < buckets.size()) {
+						Vertex v2 = buckets.get(idx + 1).top;
+						if (v2 != null && !geom.stabBox(v2.x, v2.y, x, y)) {
+							graph.resetS(v2);
+						}
+					}
+				}
+			} else {
+				// Connect to top of box
+				Vertex v = buckets.get(0).top;
+				if (v != null && !geom.stabBox(v.x, v.y, x, y)) {
+					graph.resetS(v);
+				}
+			}
+			if (node.getX() > x) {
+				node = node.getLeft();
+			} else if (node.getX() < x) {
+				node = node.getRight();
+			} else {
+				break;
+			}
+		}
+	}
+
+	public static void connectListFailingTarget(List<Vertex> nodes, DiagEqGraph graph, double x, double y) {
+		for (int i = 0; i < nodes.size(); ++i) {
+			Vertex v = nodes.get(i);
+			graph.addT(v);
+		}
+	}
+
+	public static void locateBackupTarget(Geometry geom, DiagEqGraph graph, INode node, double sourceX, double sourceY,
+			double targetX, double targetY) {
+		double bestDistance = Double.POSITIVE_INFINITY;
+		Vertex bestNode = null;
+		for (Vertex vertex : graph.verts) {
+			double vertexDistance = DiagEqGraph.heuristicDistance(vertex.x, vertex.y, targetX, targetY);
+			if (vertexDistance < bestDistance) {
+				bestNode = vertex;
+				bestDistance = vertexDistance;
+			}
+		}
+		if (bestNode != null) {
+			graph.addT(bestNode);
+		}
+	}
+
+	public static void locateBackupTargetInSourceComponent(Geometry geom, DiagEqGraph graph, INode node, double sourceX,
+			double sourceY, double targetX, double targetY) {
+		double bestDistance = Double.POSITIVE_INFINITY;
+		Vertex bestNode = null;
+		for (Vertex vertex : graph.verts) {
+			if (vertex.component == graph.lastS.component) {
+				double vertexDistance = DiagEqGraph.heuristicDistance(vertex.x, vertex.y, targetX, targetY);
+				if (vertexDistance < bestDistance) {
+					bestNode = vertex;
+					bestDistance = vertexDistance;
+				}
+			}
+		}
+		if (bestNode != null) {
+			graph.addT(bestNode);
+		}
+	}
+
 	@Override
 	public double search(double tx, double ty, double sx, double sy, List<Point> outo) {
 		Geometry geom = this.geometry;
@@ -139,34 +254,45 @@ public class L1PathPlanner implements PathPlanner {
 		// Check easy case - s and t directly connected
 		if (!geom.stabBox(tx, ty, sx, sy)) {
 			if (outo != null) {
-				if (sx != tx && sy != ty) {
-					outo.add(new Point(tx, ty));
-					outo.add(new Point(sx, ty));
-					outo.add(new Point(sx, sy));
-				} else {
-					outo.add(new Point(tx, ty));
-					outo.add(new Point(sx, sy));
-				}
-
+				outo.add(new Point(tx, ty));
+				outo.add(new Point(sx, sy));
 			}
 			return Math.abs(tx - sx) + Math.abs(ty - sy);
 		}
 
 		// Prepare graph
-		Graph graph = this.graph;
+		DiagEqGraph graph = this.graph;
 		graph.setSourceAndTarget(sx, sy, tx, ty);
 
+		boolean sourceOrTargetFailed = false;
 		// Mark target
 		connectNodes(geom, graph, this.root, true, tx, ty);
 
+		if (!graph.foundTarget()) {
+			// Mark fake target for the purpose of "best-effort"
+			locateBackupTarget(geom, graph, root, sx, sy, tx, ty);
+			sourceOrTargetFailed = true;
+		}
+
 		// Mark source
 		connectNodes(geom, graph, this.root, false, sx, sy);
+		if (graph.foundSource() && graph.searchWillFail()) {
+			// Mark fake target for the purpose of "best-effort"
+			locateBackupTargetInSourceComponent(geom, graph, root, sx, sy, tx, ty);
+			resetSourceNodes(geom, graph, root, sx, sy);
+			sourceOrTargetFailed = true;
+		}
 
-		// Run A*
-		double dist = graph.search();
+		double dist;
+		if (!sourceOrTargetFailed || geom.stabBox(sx, sy, graph.lastT.x, graph.lastT.y)) {
+			// Run A*
+			dist = graph.search(sourceOrTargetFailed);
+		} else {
+			dist = -1;
+		}
 
 		// Recover path
-		if (outo != null && dist < Double.POSITIVE_INFINITY) {
+		if (outo != null) {
 			graph.getPath(outo);
 		}
 
@@ -200,7 +326,7 @@ public class L1PathPlanner implements PathPlanner {
 		}
 
 		// Sort on events by y then x
-		on.sort(L1PathPlanner::comparePoint);
+		on.sort(DiagEqL1PathPlanner::comparePoint);
 
 		// Construct vertices and horizontal edges
 		List<IPoint> vis = new ArrayList<>();
@@ -236,7 +362,7 @@ public class L1PathPlanner implements PathPlanner {
 		return new Partition(x, left, right, rem, vis);
 	}
 
-	public static L1PathPlanner create(int[][] grid) {
+	public static DiagEqL1PathPlanner create(int[][] grid) {
 		Builder builder = new Builder(grid);
 		return builder.build();
 	}
@@ -244,7 +370,7 @@ public class L1PathPlanner implements PathPlanner {
 	private static final class Builder {
 		private int[][] grid;
 		Geometry geom;
-		Graph graph = new Graph();
+		DiagEqGraph graph = new DiagEqGraph();
 		Map<IPoint, Vertex> verts = new HashMap<IPoint, Vertex>();
 		List<IPoint[]> edges = new ArrayList<>();
 
@@ -263,7 +389,7 @@ public class L1PathPlanner implements PathPlanner {
 			return vertex;
 		}
 
-		public L1PathPlanner build() {
+		public DiagEqL1PathPlanner build() {
 			geom = Geometry.createGeometry(grid);
 			INode root = makeTree(geom.corners, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
 
@@ -276,7 +402,7 @@ public class L1PathPlanner implements PathPlanner {
 			graph.init();
 
 			// Return resulting tree
-			return new L1PathPlanner(geom, graph, root);
+			return new DiagEqL1PathPlanner(geom, graph, root);
 		}
 
 		public List<Vertex> makeVertexList(List<IPoint> inList) {
@@ -419,7 +545,7 @@ public class L1PathPlanner implements PathPlanner {
 	}
 
 	@Override
-	public Graph getGraph() {
+	public DiagEqGraph getGraph() {
 		return graph;
 	}
 

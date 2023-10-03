@@ -10,12 +10,18 @@ import net.warsmash.l1.pathfinder.util.Point;
 import net.warsmash.l1.pathfinder.vertex.IPoint;
 import net.warsmash.l1.pathfinder.vertex.Vertex;;
 
-public class Graph extends AbstractGraph {
+public class DiagEqGraph extends AbstractGraph {
+
+	public static double heuristicDistance(double ax, double ay, double bx, double by) {
+		double dx = bx - ax;
+		double dy = by - ay;
+		return Math.sqrt(dx * dx + dy * dy);
+	}
 
 	public static double heuristic(double[] tdist, double tx, double ty, Vertex node) {
 		double nx = +node.x;
 		double ny = +node.y;
-		double pi = Math.abs(nx - tx) + Math.abs(ny - ty);
+		double pi = heuristicDistance(nx, ny, tx, ty);
 		double[] ndist = node.landmark;
 		for (int i = 0; i < NUM_LANDMARKS; ++i) {
 			pi = Math.max(pi, tdist[i] - ndist[i]);
@@ -23,7 +29,7 @@ public class Graph extends AbstractGraph {
 		return 1.0000009536743164 * pi;
 	}
 
-	public Graph() {
+	public DiagEqGraph() {
 		this.target = Vertex.createVertex(0, 0);
 		this.freeList = this.target;
 		this.toVisit = NIL;
@@ -49,13 +55,17 @@ public class Graph extends AbstractGraph {
 	public void addS(Vertex v) {
 		if ((v.state & 2) == 0) {
 			v.heuristic = heuristic(this.landmarkDist, this.dstX, this.dstY, v);
-			v.weight = Math.abs(this.srcX - v.x) + Math.abs(this.srcY - v.y) + v.heuristic;
+			v.weight = heuristicDistance(this.srcX, this.srcY, v.x, v.y) + v.heuristic;
 			v.state |= 2;
 			v.pred = null;
 			this.toVisit = Vertex.push(this.toVisit, v);
 			this.freeList = Vertex.insert(this.freeList, v);
 			this.lastS = v;
 		}
+	}
+
+	public void resetS(Vertex v) {
+		v.heuristic = heuristic(this.landmarkDist, this.dstX, this.dstY, v);
 	}
 
 	// Mark vertex connected to target
@@ -66,7 +76,7 @@ public class Graph extends AbstractGraph {
 			this.lastT = v;
 
 			// Update heuristic
-			double d = Math.abs(v.x - this.dstX) + Math.abs(v.y - this.dstY);
+			double d = heuristicDistance(v.x, v.y, this.dstX, this.dstY);
 			double[] vdist = v.landmark;
 			double[] tdist = this.landmarkDist;
 			for (int i = 0; i < NUM_LANDMARKS; ++i) {
@@ -85,18 +95,12 @@ public class Graph extends AbstractGraph {
 		outpath.add(new Point(prevX, prevY));
 		Vertex head = this.target.pred;
 		while (head != null) {
-			if (prevX != head.x && prevY != head.y) {
-				outpath.add(new Point(head.x, prevY));
-			}
 			if (prevX != head.x || prevY != head.y) {
 				outpath.add(new Point(head.x, head.y));
 			}
 			prevX = head.x;
 			prevY = head.y;
 			head = head.pred;
-		}
-		if (prevX != this.srcX && prevY != this.srcY) {
-			outpath.add(new Point(this.srcX, prevY));
 		}
 		if (prevX != this.srcX || prevY != this.srcY) {
 			outpath.add(new Point(this.srcX, this.srcY));
@@ -149,7 +153,7 @@ public class Graph extends AbstractGraph {
 
 	// For each connected component compute a set of landmarks
 	public void findLandmarks(List<Vertex> component) {
-		component.sort(Graph::compareVert);
+		component.sort(DiagEqGraph::compareVert);
 		Vertex v = component.get((int) ((long) component.size() >> 1));
 		for (int k = 0; k < NUM_LANDMARKS; ++k) {
 			v.weight = 0.0;
@@ -165,7 +169,7 @@ public class Graph extends AbstractGraph {
 					if (u.state == 2) {
 						continue;
 					}
-					double d = w + Math.abs(v.x - u.x) + Math.abs(v.y - u.y);
+					double d = w + heuristicDistance(v.x, v.y, u.x, u.y);
 					if (u.state == 0) {
 						u.state = 1;
 						u.weight = d;
@@ -201,7 +205,7 @@ public class Graph extends AbstractGraph {
 	}
 
 	// Runs a* on the graph
-	public double search() {
+	public double search(boolean backupMode) {
 		Vertex target = this.target;
 		Vertex freeList = this.freeList;
 		double[] tdist = this.landmarkDist;
@@ -210,7 +214,8 @@ public class Graph extends AbstractGraph {
 		double dist = Double.POSITIVE_INFINITY;
 
 		// Test for case where S and T are disconnected
-		if (this.lastS != null && this.lastT != null && this.lastS.component == this.lastT.component) {
+		boolean willFail = this.lastS == null || this.lastT == null || this.lastS.component != this.lastT.component;
+		if (!willFail) {
 			double sx = +this.srcX;
 			double sy = +this.srcY;
 			double tx = +this.dstX;
@@ -224,7 +229,7 @@ public class Graph extends AbstractGraph {
 
 				if (node.state == 3) {
 					// If node is connected to target, exit
-					dist = d + Math.abs(tx - nx) + Math.abs(ty - ny);
+					dist = d + heuristicDistance(nx, ny, tx, ty);
 					target.pred = node;
 					break;
 				}
@@ -243,7 +248,7 @@ public class Graph extends AbstractGraph {
 					if (state == 4) {
 						continue;
 					}
-					double vd = d + Math.abs(nx - v.x) + Math.abs(ny - v.y);
+					double vd = d + heuristicDistance(v.x, v.y, nx, ny);
 					if (state < 2) {
 						double vh = heuristic(tdist, tx, ty, v);
 						v.state |= 2;
@@ -279,5 +284,17 @@ public class Graph extends AbstractGraph {
 
 		// Return target distance
 		return dist;
+	}
+
+	public boolean foundTarget() {
+		return this.lastT != null;
+	}
+
+	public boolean foundSource() {
+		return this.lastS != null;
+	}
+
+	public boolean searchWillFail() {
+		return this.lastS == null || this.lastT == null || this.lastS.component != this.lastT.component;
 	}
 }

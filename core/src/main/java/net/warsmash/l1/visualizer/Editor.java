@@ -3,7 +3,7 @@ package net.warsmash.l1.visualizer;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 public class Editor {
-	private static final int DEFAULT_GRID_SIZE = 32;
+	private static final int DEFAULT_GRID_SIZE = 128;
 	private int width;
 	private int height;
 	private Renderer renderer;

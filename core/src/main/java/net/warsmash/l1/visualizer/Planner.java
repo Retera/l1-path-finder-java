@@ -9,7 +9,11 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
-import net.warsmash.l1.pathfinder.planner.L1PathPlanner;
+import net.warsmash.l1.pathfinder.AbstractGraph;
+import net.warsmash.l1.pathfinder.Geometry;
+import net.warsmash.l1.pathfinder.planner.PathPlanner;
+import net.warsmash.l1.pathfinder.planner.SizedPathPlanner;
+import net.warsmash.l1.pathfinder.planner.TransformedSpace;
 import net.warsmash.l1.pathfinder.util.Point;
 import net.warsmash.l1.pathfinder.vertex.Vertex;
 
@@ -19,7 +23,7 @@ public class Planner {
 	private int[] src;
 	private int[] dst;
 	private List<Point> path;
-	private L1PathPlanner planner;
+	private PathPlanner planner;
 
 	public Planner(ScreenViewport screenViewport) {
 		Editor editorBuilder = new Editor(screenViewport);
@@ -79,13 +83,14 @@ public class Planner {
 	}
 
 	public void calcPath() {
-		for (int i = 0; i < planner.graph.verts.size(); ++i) {
-			planner.graph.verts.get(i).weight = Double.POSITIVE_INFINITY;
+		AbstractGraph graph = planner.getGraph();
+		for (int i = 0; i < graph.verts.size(); ++i) {
+			graph.verts.get(i).weight = Double.POSITIVE_INFINITY;
 		}
 		path.clear();
 		if (src[0] < 0 || dst[0] < 0) {
-			for (int i = 0; i < planner.graph.verts.size(); ++i) {
-				Vertex v = planner.graph.verts.get(i);
+			for (int i = 0; i < graph.verts.size(); ++i) {
+				Vertex v = graph.verts.get(i);
 				v.state = 0;
 //				v.target = false;
 //				Vertex.clear(v);
@@ -93,7 +98,7 @@ public class Planner {
 			}
 			return;
 		}
-		planner.search(src[0], src[1], dst[0], dst[1], path);
+		planner.search(dst[0], dst[1], src[0], src[1], path);
 	}
 
 	public void buttonChange(int tileX, int tileY, int buttons) {
@@ -113,7 +118,7 @@ public class Planner {
 	}
 
 	public void buildPlanner() {
-		this.planner = L1PathPlanner.create(editor.grid);
+		this.planner = SizedPathPlanner.create(editor.grid);
 		calcPath();
 //		drawGeometry();
 	}
@@ -132,16 +137,18 @@ public class Planner {
 			}
 		}
 
-		editor.graphDist(planner.graph);
-		editor.graph(planner.graph, 0xB28DC7);
-		editor.drawCorners(planner.geometry.corners, 0xD9E6F2);
-		for (int i = 0; i < planner.graph.landmarks.size(); ++i) {
-			Vertex l = planner.graph.landmarks.get(i);
-			editor.circle(l.x, l.y, 0xFFFFB1);
+		AbstractGraph graph = planner.getGraph();
+		Geometry geometry = planner.getGeometry();
+		editor.graphDist(planner, graph);
+		editor.graph(planner, graph, 0xB28DC7);
+		editor.drawCorners(planner, geometry.corners, 0xD9E6F2);
+		for (int i = 0; i < graph.landmarks.size(); ++i) {
+			Vertex l = graph.landmarks.get(i);
+			editor.circle(planner.getUnprojectedX(l.x, l.y), planner.getUnprojectedY(l.x, l.y), 0xFFFFB1);
 		}
-		editor.path(path, 0xFFFFFF);
-		editor.circle(src[0], src[1], 0x00FF00);
-		editor.circle(dst[0], dst[1], 0xFF0000);
+		editor.path(TransformedSpace.IDENTITY, path, 0xFFFFFF);
+		editor.circle(TransformedSpace.IDENTITY.getUnprojectedX(src[0], src[1]), TransformedSpace.IDENTITY.getUnprojectedY(src[0], src[1]), 0x00FF00);
+		editor.circle(TransformedSpace.IDENTITY.getUnprojectedX(dst[0], dst[1]), TransformedSpace.IDENTITY.getUnprojectedY(dst[0], dst[1]), 0xFF0000);
 		editor.endDraw();
 	}
 
